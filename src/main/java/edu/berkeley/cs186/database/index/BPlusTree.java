@@ -145,9 +145,10 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
+        LeafNode leafNode = root.get(key);
+        return leafNode.getKey(key);
         // TODO(proj2): implement
 
-        return Optional.empty();
     }
 
     /**
