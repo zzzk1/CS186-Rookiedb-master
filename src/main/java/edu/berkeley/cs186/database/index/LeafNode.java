@@ -1,5 +1,6 @@
 package edu.berkeley.cs186.database.index;
 
+import com.sun.xml.internal.ws.api.message.ExceptionHasMessage;
 import edu.berkeley.cs186.database.common.Buffer;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
@@ -7,6 +8,7 @@ import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
 import javax.xml.crypto.Data;
@@ -147,16 +149,13 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.get.
     @Override
     public LeafNode get(DataBox key) {
-        // TODO(proj2): implement
 
         return this;
-
     }
 
     // See BPlusNode.getLeftmostLeaf.
     @Override
     public LeafNode getLeftmostLeaf() {
-        // TODO(proj2): implement
 
         return this;
     }
@@ -164,8 +163,54 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
+        // FIXME(proj2): don't implement overflows
+        //获取度数
+        int order = this.metadata.getOrder();
 
+        //获取此叶节点的整体数
+        int d = getKeys().size();
+
+        //先插入,排序
+        int len = this.getKeys().size();
+        //本身为空,直接添加
+        if (len == 0) {
+            this.getKeys().add(key);
+            this.getRids().add(rid);
+            sync();
+            return Optional.empty();
+        }
+        //不为空,排序
+        for (int i = 0; i < len; i++) {
+            if (key.getInt() < this.getKeys().get(i).getInt()) {
+                this.getKeys().add(i,key);
+                this.getRids().add(i,rid);
+                break;
+            } else if (i == len - 1) {
+                this.getKeys().add(key);
+                this.getRids().add(rid);
+            }
+        }
+        //溢出
+        if (d > 2 * order) {
+            List<RecordId> newRecordId = new ArrayList<>();
+            List<DataBox> newKeys= new ArrayList<>();
+            //d+1以后的整体移动到新的页面
+            for (int i = d + 1; i < len; i++) {
+                newRecordId.add(this.getRids().get(i));
+                newKeys.add(this.getKeys().get(i));
+            }
+            this.getRids().subList(d+1, len).clear();
+            this.getKeys().subList(d+1, len).clear();
+
+            //保存右叶节点
+            Optional<Long> newRightSibling = this.rightSibling;
+            LeafNode diffNewLeafNode = new LeafNode(metadata, bufferManager, newKeys, newRecordId, newRightSibling, treeContext);
+            this.rightSibling = diffNewLeafNode.rightSibling;
+            sync();
+            return Optional.of(new Pair<>(diffNewLeafNode.getKeys().get(0), diffNewLeafNode.rightSibling.get()));
+        }
+
+        sync();
         return Optional.empty();
     }
 
@@ -279,7 +324,7 @@ class LeafNode extends BPlusNode {
         //
         //   n = (pageSizeInBytes - 13) / (keySize + ridSize)
         //
-        // The order d is half of n.
+        // The  d is half of n.
         int keySize = keySchema.getSizeInBytes();
         int ridSize = RecordId.getSizeInBytes();
         int n = (pageSize - 13) / (keySize + ridSize);

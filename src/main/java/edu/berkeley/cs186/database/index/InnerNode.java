@@ -80,7 +80,7 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.get.
     @Override
     public LeafNode get(DataBox key) {
-        // TODO(proj2): implement
+
         int index = numLessThanEqual(key, keys);
         return getChild(index).get(key);
     }
@@ -89,7 +89,7 @@ class InnerNode extends BPlusNode {
     @Override
     public LeafNode getLeftmostLeaf() {
         assert(children.size() > 0);
-        // TODO(proj2): implement
+
 
         return getChild(0).getLeftmostLeaf();
 
@@ -98,8 +98,17 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // TODO(proj2): implement
+        // FIXME(proj2): don't implement overflows
 
+        //找到叶节点
+        LeafNode leafNode = (LeafNode) this.get(key);
+
+        //获取叶节点执行插入后返回的信息
+        Optional<Pair<DataBox, Long>> innerInfo = leafNode.put(key, rid);
+
+        int order = this.metadata.getOrder();
+
+        sync();
         return Optional.empty();
     }
 
