@@ -1,6 +1,7 @@
 package edu.berkeley.cs186.database.index;
 
 import edu.berkeley.cs186.database.TransactionContext;
+import edu.berkeley.cs186.database.cli.parser.ParseException;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
 import edu.berkeley.cs186.database.concurrency.LockType;
@@ -144,10 +145,8 @@ public class BPlusTree {
         typecheck(key);
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
-
-        LeafNode leafNode = root.get(key);
-        return leafNode.getKey(key);
-        // TODO(proj2): implement
+        return root.get(key) // 根据key去找到结点因为内部结点,叶结点都实现了get,这里会递归去找
+                .getKey(key);
 
     }
 
@@ -254,6 +253,22 @@ public class BPlusTree {
         // TODO(proj4_integration): Update the following line
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
+        //查找树中是否存在
+        if (!get(key).equals(Optional.empty())) {
+            return;
+        }
+        Optional<Pair<DataBox, Long>> InnerNodeInfo = root.put(key, rid);
+        if (InnerNodeInfo.equals(Optional.empty())) {
+           return;
+        }
+
+        Pair<DataBox, Long> p = InnerNodeInfo.get();
+        List<DataBox> keys = new ArrayList<>();
+        keys.add(p.getFirst());
+        List<Long> children = new ArrayList<>();
+        children.add(root.getPage().getPageNum());
+        children.add(p.getSecond());
+        updateRoot(new InnerNode(metadata, bufferManager, keys, children, lockContext));
         // TODO(proj2): implement
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
@@ -308,6 +323,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): implement
+        root.remove(key);
 
         return;
     }

@@ -98,18 +98,47 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.put.
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
-        // FIXME(proj2): don't implement overflows
+        // FIXME(proj2): need rebuild
 
-        //找到叶节点
-        LeafNode leafNode = (LeafNode) this.get(key);
+        int index = numLessThanEqual(key, keys);
+        BPlusNode child = getChild(index);
+        Optional<Pair<DataBox, Long>> o = child.put(key, rid);
 
-        //获取叶节点执行插入后返回的信息
-        Optional<Pair<DataBox, Long>> innerInfo = leafNode.put(key, rid);
+// 如果不需要分裂就直接跳出递归
+        if (!o.isPresent()) {
+            return Optional.empty();
+        }
 
-        int order = this.metadata.getOrder();
+// 下面开始分裂的逻辑
+        Pair<DataBox, Long> p = o.get();
+        keys.add(index, p.getFirst());
+        children.add(index + 1, p.getSecond());
 
+// 获得阶数,溢出判断
+        int d = metadata.getOrder();
+        if (keys.size() <= 2 * d) {
+            sync();
+            return Optional.empty();
+        }
+
+// 如果结点溢出则进行下面的分裂操作
+        assert(keys.size() == 2*d + 1);
+        List<DataBox> leftKeys = keys.subList(0, d);
+        DataBox middleKey = keys.get(d);
+        List<DataBox> rightKeys = keys.subList(d + 1, 2*d + 1);
+        List<Long> leftChildren = children.subList(0, d + 1);
+        List<Long> rightChildren = children.subList(d + 1, 2*d + 2);
+
+// 创建内部结点的右结点
+        InnerNode n = new InnerNode(metadata, bufferManager, rightKeys, rightChildren, treeContext);
+
+// 更新左结点
+        this.keys = leftKeys;
+        this.children = leftChildren;
         sync();
-        return Optional.empty();
+
+// 返回右结点
+        return Optional.of(new Pair<>(middleKey, n.getPage().getPageNum()));
     }
 
     // See BPlusNode.bulkLoad.
@@ -124,9 +153,13 @@ class InnerNode extends BPlusNode {
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
 
-        return;
+        LeafNode deleteNode = (LeafNode) get(key);
+        if (deleteNode == null) {
+            return;
+        }
+        deleteNode.remove(key);
+        sync();
     }
 
     // Helpers /////////////////////////////////////////////////////////////////

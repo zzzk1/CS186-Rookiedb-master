@@ -164,54 +164,36 @@ class LeafNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // FIXME(proj2): don't implement overflows
-        //获取度数
-        int order = this.metadata.getOrder();
+        int index = InnerNode.numLessThanEqual(key, keys);
+        keys.add(index, key);
+        rids.add(index, rid);
 
-        //获取此叶节点的整体数
-        int d = getKeys().size();
-
-        //先插入,排序
-        int len = this.getKeys().size();
-        //本身为空,直接添加
-        if (len == 0) {
-            this.getKeys().add(key);
-            this.getRids().add(rid);
+// 获得阶数,溢出判断
+        int d = metadata.getOrder();
+        if (keys.size() <= 2 * d) {
             sync();
             return Optional.empty();
         }
-        //不为空,排序
-        for (int i = 0; i < len; i++) {
-            if (key.getInt() < this.getKeys().get(i).getInt()) {
-                this.getKeys().add(i,key);
-                this.getRids().add(i,rid);
-                break;
-            } else if (i == len - 1) {
-                this.getKeys().add(key);
-                this.getRids().add(rid);
-            }
-        }
-        //溢出
-        if (d > 2 * order) {
-            List<RecordId> newRecordId = new ArrayList<>();
-            List<DataBox> newKeys= new ArrayList<>();
-            //d+1以后的整体移动到新的页面
-            for (int i = d + 1; i < len; i++) {
-                newRecordId.add(this.getRids().get(i));
-                newKeys.add(this.getKeys().get(i));
-            }
-            this.getRids().subList(d+1, len).clear();
-            this.getKeys().subList(d+1, len).clear();
 
-            //保存右叶节点
-            Optional<Long> newRightSibling = this.rightSibling;
-            LeafNode diffNewLeafNode = new LeafNode(metadata, bufferManager, newKeys, newRecordId, newRightSibling, treeContext);
-            this.rightSibling = diffNewLeafNode.rightSibling;
-            sync();
-            return Optional.of(new Pair<>(diffNewLeafNode.getKeys().get(0), diffNewLeafNode.rightSibling.get()));
-        }
+// 如果结点溢出则进行下面的分裂操作
+        assert(keys.size() == 2*d + 1);
+        List<DataBox> leftKeys = keys.subList(0, d);
+        List<DataBox> rightKeys = keys.subList(d, 2 * d + 1);
+        List<RecordId> leftRids = rids.subList(0, d);
+        List<RecordId> rightRids = rids.subList(d, 2 * d + 1);
 
+// 创建叶子结点的右结点
+        LeafNode n = new LeafNode(metadata, bufferManager, rightKeys, rightRids, rightSibling, treeContext);
+        long pageNum = n.getPage().getPageNum();
+
+// 更新左结点
+        this.keys = leftKeys;
+        this.rids = leftRids;
+        this.rightSibling = Optional.of(pageNum);
         sync();
-        return Optional.empty();
+
+// 返回右结点
+        return Optional.of(new Pair<>(rightKeys.get(0), pageNum));
     }
 
     // See BPlusNode.bulkLoad.
@@ -226,9 +208,18 @@ class LeafNode extends BPlusNode {
     // See BPlusNode.remove.
     @Override
     public void remove(DataBox key) {
-        // TODO(proj2): implement
+        LeafNode deleteNode = get(key);
+        if (deleteNode == null) {
+            return;
+        }
 
-        return;
+        for (int i = 0; i < this.getKeys().size(); i++) {
+            if (this.getKeys().get(i).getInt() == key.getInt()) {
+                this.getKeys().remove(i);
+                this.getRids().remove(i);
+            }
+        }
+        sync();
     }
 
     // Iterators ///////////////////////////////////////////////////////////////
