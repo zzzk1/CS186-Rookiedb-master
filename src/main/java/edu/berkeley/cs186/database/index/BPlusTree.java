@@ -269,7 +269,7 @@ public class BPlusTree {
         children.add(root.getPage().getPageNum());
         children.add(p.getSecond());
         updateRoot(new InnerNode(metadata, bufferManager, keys, children, lockContext));
-        // TODO(proj2): implement
+        // FIXME(proj2): need rebuild
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
